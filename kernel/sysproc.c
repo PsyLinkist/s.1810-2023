@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -90,4 +91,36 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// implements the new system call by remembering 
+// its argument in a new variable in the proc structure
+uint64
+sys_trace(void)
+{
+  int tracecalls;
+
+  argint(0, &tracecalls);
+  myproc()->mask = tracecalls;
+  return 0;
+}
+
+// copy a struct sysinfo back to user space
+uint64
+sys_sysinfo(void)
+{
+  struct sysinfo si;
+  struct proc *p = myproc();
+  uint64 addr;
+
+  si.freemem = fetchfreemem();
+  si.nproc = fetchnproc();
+
+
+  argaddr(0, &addr);
+  
+  if(copyout((p->pagetable), addr, (char *)&si, sizeof(si)) < 0)
+    return -1;
+
+  return 0;
 }
