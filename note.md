@@ -54,21 +54,20 @@ Variables defined in a function are local function and stored in stack. The stor
 ### Engineering
 - Q: shell 的 command 及其变量是怎么传递并执行的？
 每个 command 只接收到附在 command 后的变量？
-那么 shell 对通过管道的变量与附在其后的变量接收顺序是什么样的？可以一试。
+那么 shell 对通过管道的变量与附在其后的变量接收顺序是什么样的？可以一试。  
     A: 在 bash 检测到对应的 command 名字，例如 xargs 后，从 xargs 开始的所有被空格分隔的变量都会传入到该 command 的函数中。
 
-- Q: How to accept the output from left through `|` ? Give a test about the standard input 0.
+- Q: How to accept the output from left through `|` ? Give a test about the standard input 0.  
     A: Yes, the output from left would be written into `1` standard output, therefore, can be read from standard input `0`.
 
-- Q: Execution sequence?
+- Q: Execution sequence?  
     A: The xargs-ed command execution sequence would be: `<command> <origin var> <left output>`
 ### Supervisor mode & user mode
-- Q: xv6 称应用（只能在 user 模式下执行。）如果想要执行硬件（如CPU）在 supervisor 下的功能，硬件就会把这个应用关掉。那如果应用需要用到这些功能呢？转为 supervisor 模式后执行和 user 模式执行有什么区别？多此一举转为 supervisor 模式再执行这些底层功能有什么好处？
-
+- Q: xv6 称应用（只能在 user 模式下执行。）如果想要执行硬件（如CPU）在 supervisor 下的功能，硬件就会把这个应用关掉。那如果应用需要用到这些功能呢？转为 supervisor 模式后执行和 user 模式执行有什么区别？多此一举转为 supervisor 模式再执行这些底层功能有什么好处？  
     A: 在 xv6 的系统调用中，会有对传入数据的检测，可能是这些检测为supervisor模式增添了一道防御。
 
 ### Read & write
-- Q: 在读写 pipe 的时候，关闭了父母进程的 write 端，但为什么子进程的read 端还是被阻塞了?
+- Q: 在读写 pipe 的时候，关闭了父母进程的 write 端，但为什么子进程的read 端还是被阻塞了?  
     A: 因为在 fork 的时候， fd 也被 fork 出一套，虽然 fd 的名字不同，但指向的 inode 是同一个，所以相当于 read 所读取的 pipe 还有一个 write 端没有关闭。
 
 ### Recursive function return
