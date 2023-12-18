@@ -92,3 +92,46 @@ Recursive function will **automatically return to the previous recusive call** w
 - Sepc register. Storing the address of the instruction that caused the exception.
 - Stval register. Additional information, ussually the comment about the instruction that caused the exception.
 
+# Lab notes
+Some notes when doing lab exercises.
+
+## Lab: pgtbl
+
+### Speed up system calls
+
+#### Goal
+Learn how to insert mappings into a pagetable.
+
+#### Do
+- Map one read-only page at USYSCALL when **each process** is created. (check `memlayout.h`)
+   - Store a `struct usyscall` at the start.
+   - Initialize, to store the PID of the current process.
+
+#### Hints
+- Choose read-only permission.
+- Lifecycle of a new page to be done:
+- Read through trapframe handling in `kernel/proc.c`
+- Do.
+
+#### Q&As
+- Q: Which other xv6 system call(s) could be made faster using this shared page? Explain how.  
+    A:
+
+- Q: How to Speed up system calls?  
+    A: By sharing data in a read-only region between userspace and the kernel, which **eliminates the need for kernel crossings.**
+
+Map a page at USYSCALL (a virtual address defined in `memlayout.h`) when each process is created.
+- Q: Where is the place process being created?  
+    A: **allocproc** in `kernel/proc.c`. Do the allocation work. Seems an OS already has limited processes.
+
+- Q: How to map a page? Where does it map to?  
+    A: Map page:  
+    `mappages()`  
+    Where?  
+    `p->usyscall`, this is the PA.  
+
+- Q: How to initialize a page?  
+    Follow the `trapframe` in `kernel/proc.c`. (And this is included in hint.)
+
+- Q: Now I have mapped a usyscall page which has similar (not VA) location and other similar features to trapframe, How does it help with the speed of system calls?  
+    A: Maybe it is applied exceptionally to specified function?
