@@ -113,6 +113,17 @@ Learn how to insert mappings into a pagetable.
 - Read through trapframe handling in `kernel/proc.c`
 - Do.
 
+#### Key words in Code
+tag:  
+#Speed up system calls  
+
+keyword:  
+trapframe  
+struct usyscall  
+
+test func:  
+pgtbltest  
+
 #### Q&As
 - Q: Which other xv6 system call(s) could be made faster using this shared page? Explain how.  
     A:
