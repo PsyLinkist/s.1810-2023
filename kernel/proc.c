@@ -125,6 +125,14 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  // #Speed up system calls
+  if((p->usyscall = (struct usyscall *)kalloc()) == 0) {
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  p->usyscall->pid = p->pid;
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -155,6 +163,10 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  // #Speed up system calls
+  if(p->usyscall)
+    kfree((void*)p->usyscall);
+  p->usyscall = 0;
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -182,6 +194,13 @@ proc_pagetable(struct proc *p)
   pagetable = uvmcreate();
   if(pagetable == 0)
     return 0;
+  // #Speed up system calls
+  if(mappages(pagetable, USYSCALL, PGSIZE,
+              (uint64)(p->usyscall), PTE_R | PTE_U) < 0){
+    uvmunmap(pagetable, USYSCALL, 1, 0);
+    uvmfree(pagetable, 0);
+    return 0;
+  }
 
   // map the trampoline code (for system call return)
   // at the highest user virtual address.
@@ -211,6 +230,8 @@ void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+  // #Speed up system calls
+  uvmunmap(pagetable, USYSCALL, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
 }
@@ -295,6 +316,10 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+
+  // #Speed up system calls
+  *(np->usyscall) = *(p->usyscall);
+  np->usyscall->pid = np->pid; // it is the chile's pid
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
