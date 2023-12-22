@@ -125,8 +125,10 @@ test func:
 pgtbltest  
 
 #### Q&As
-- Q: Which other xv6 system call(s) could be made faster using this shared page? Explain how.  
-    A:
+- >Q: Which other xv6 system call(s) could be made faster using this shared page? Explain how.  
+    A: Any system call purely retrieve information from kernel. Or any system call invokes the `copyout` function.  
+    - Q: Which system call is accelerated because of this page? And why?
+        A: `SYS_getpid`. The `ugetpid()` didn't call syscall to fetch the pid, which does not trap into kernel.
 
 - Q: How to Speed up system calls?  
     A: By sharing data in a read-only region between userspace and the kernel, which **eliminates the need for kernel crossings.**
@@ -146,3 +148,45 @@ Map a page at USYSCALL (a virtual address defined in `memlayout.h`) when each pr
 
 - Q: Now I have mapped a usyscall page which has similar (not VA) location and other similar features to trapframe, How does it help with the speed of system calls?  
     A: Maybe it is applied exceptionally to specified function?
+
+### Print a page table
+#### Goal
+Visualize RISC-V page tables, aid future debugging.
+
+#### Do
+- Define function `void vmprint(pagetabl_t pgtbl)` which print the pagetable.
+- Insert `if(p->pid==1) vmprint(p->pagetable)` in `exec.c` just before `return argc`.
+
+#### Hints
+- Put `vmprint()` in `kernel/vm.c`.
+- Use macros at the end of the file kernel/riscv.h
+- Inspirational `freewalk`
+- Remember prototype of `vmprint` in kernel/defs.h.
+- `%p` to print out full 64-bit hex PTEs and addresses.
+- The 1st number in each line represents the PTE index in its page-table page.
+
+#### keywords
+#Print a page table
+
+#### Q&As
+- > Q: For every leaf page in the vmprint output, explain what it logically contains and what its permission bits are. Figure 3.4 in the xv6 book might be helpful, although note that the figure might have a slightly different set of pages than the init process that's being inspected here.  
+
+    A: 
+    - Contents and Permissions: 
+        - trampoline: r,x,v
+        - trapframe: r,w,v
+        - heap: r,w,u,v
+        - stack: r,w,u,v
+        - data: r,w,u,v
+        - text: r,x,v
+
+
+- Q: What is macros in kernel/riscv.h?  
+    A: #define XXXX 
+
+- Q: The 1st number in each line represents the PTE index in its page-table page. Where can I find the PTE index?  
+    A: A page-table page can hold 512 PTEs, which means there are at most 512 indexs(0~511) of PTE. The Index should be **in the virtual address** and 9 bits in 27 bits of index for storing them. For example:  
+    ![](https://cdn.jsdelivr.net/gh/PsyLinkist/LearningBlogPics@main/Materials/LearningBlogPics202312201743908.png) 
+
+- Q: Where do I get the index then?  
+    A: It is the index of PTEs, so it's the index of the PTE array. 
