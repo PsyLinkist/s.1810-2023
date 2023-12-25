@@ -190,3 +190,45 @@ Visualize RISC-V page tables, aid future debugging.
 
 - Q: Where do I get the index then?  
     A: It is the index of PTEs, so it's the index of the PTE array. 
+
+### Detect which pages have been accessed
+#### Goal
+- Aid some garbage collectors.
+
+#### Do
+- Implement `pgaccess()`, a system call that reports which pages have been accessed. (Via flag A) 
+![flag A](https://cdn.jsdelivr.net/gh/PsyLinkist/LearningBlogPics@main/Materials/LearningBlogPics202312221158463.png)
+
+#### Hints
+- Three arguments: Starting virtual address of the first user page; Number of the pages; A user address as buffer.
+- Read `pgaccess_test()` in `user/pgtbltest.c`, to see how `pgaccess` is used.
+- Start by implementing `sys_pgaccess()` in `kernel/sysproc.c`.
+- Parse arguments using `argaddr()` and `argint()`.
+- Store a temporary buffer in the kernel, filling it with the right bits, then copy it to the user (via `copyout()`).
+- An upper limit on the number of can-be-scanned pages. (Okay)
+- `walk()` in `kernel/vm.c` is helpful for finding the right PTEs.
+- Define `PTE_A` in `kernel/riscv.h`, Consult the "RISC-V privileged architecture manual" to determine its value.
+- Clear `PTE_A` after checking.
+- `vmprint()` may come in handy to debug.
+
+#### keywords
+#Detect accessed pages
+
+#### Q&As
+- Q: How does `pgaccess_test()` work?  
+    A: By checking the abits argument after accessing, pgaccess_test() get to know whether or not the answer is correct.  
+    ![](https://cdn.jsdelivr.net/gh/PsyLinkist/LearningBlogPics@main/Materials/LearningBlogPics202312221537512.png)
+
+- Q: How to pass arguments to sys_pgaccess()?  
+    A: `argint()` and `argaddr()`.
+
+- Q: a0 - a5 register, what data do they store respectively?  
+    A: No restrictions.
+
+- Q: Fill kernel temp buf with right bits. How can I get the right bits? And how does it relate to the 3rd argument which is an address?  
+    A:  
+    - Right bits:  Compare every page PTE with PTE_A, and modify abits depends on the result.
+    - Relation: Pass the content in the buffer to the address using copyout.
+
+- Q: `Walk()`?  
+    A: Knowing VA, return PTE. Then we could compare it with PTE_A to get to know whether or not it is accessed.
