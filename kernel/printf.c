@@ -122,6 +122,7 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+  backtrace(); // #backtracing
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -132,4 +133,32 @@ printfinit(void)
 {
   initlock(&pr.lock, "pr");
   pr.locking = 1;
+}
+
+// #backtracing
+void
+backtrace(void)
+{
+  uint64 pgp;
+  uint64 sfp;
+  uint64* last_fp_addr;
+  uint64 last_fp;
+  uint64* return_addr_ptr;
+
+  sfp = r_fp(); // stack frame pointer of current function
+  pgp = PGROUNDDOWN(sfp); // current page pointer
+
+  printf("backtrace:\n");
+  
+  return_addr_ptr = (uint64*)(sfp - 8); // fetch return address
+  printf("%p\n", *return_addr_ptr); // print return address
+
+  last_fp_addr = (uint64*)(sfp - 16); // fetch stack frame pointer of last stack frame
+  while(pgp == PGROUNDDOWN(*last_fp_addr)) { // while in the same page
+    last_fp = *last_fp_addr;
+    return_addr_ptr = (uint64*)(last_fp-8);
+
+    printf("%p\n", *return_addr_ptr);
+    last_fp_addr = (uint64*)(last_fp - 16);
+  }
 }
