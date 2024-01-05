@@ -73,7 +73,7 @@ Variables defined in a function are local function and stored in stack. The stor
 ### Recursive function return
 Recursive function will **automatically return to the previous recusive call** when finished execution.
 
-### Run GDB
+## Run GDB
 1. In first terminal, Cd xv6-labs-2023, run `make qemu-gdb`;
 2. Open another terminal, run `gdb-multiarch`, wait for response;
 3. Back to the first terminal, run `make qemu-gdb`;
@@ -81,24 +81,79 @@ Recursive function will **automatically return to the previous recusive call** w
 - It is frustrating indeed. I believe the reason to blame is in some code in the qemu, the port is set to `25000`.
     
 
-#### Say you wanted to break every time the kernel enters the function syscall from kernel/syscall.c
+### Say you wanted to break every time the kernel enters the function syscall from kernel/syscall.c
 1. Inside the gdb prompt: file kernel/kernel (this is a binary that has all kernel code)
 2. Inside the gdb prompt: b syscall
 3. Hit c. At this point you will start hitting the breakpoint above
 4. Keep hitting c to see where the kernell hits the syscall function. You will how the output in the first window is progressing.
 
-#### Exception|Interrupt registers
+### Exception|Interrupt registers
 - Scause register. Storing the cause(name) of the exception.
 - Sepc register. Storing the address of the instruction that caused the exception.
 - Stval register. Additional information, ussually the comment about the instruction that caused the exception.
+
+### GDB command: 
+- `x/3i 0xe16`:
+    - `x`: Examine menory.
+    - `/3i`: Display three instructions.
+    - `0xe16`: Memory address.
+
+- `p $pc`: 
+    - `p`: Print the value of the proogram counter.
+
+- `p/x $a1`:
+    - `/x`: Format the output in hexadecimal.
+
+- `x/2c $a1`:
+    - `/2c`: Display two units of memory, each interpreted as a character (`c`).
+
+# Reading and Lec notes
+## xv6-Chapter4
+### Process of a system call
+#### `ecall`:
+- Enter supervisor mode;
+- Save `pc`;
+- Get to stvec, start trap handler code (by fetching TRAMPOLINE page);
+- Set `SIE`, prevent further interrupt.
+
+#### `trampoline`: 
+Mapped at both user page table and kernel page table.  
+Having trap handler code `uservec` and `userret`, `uservec`:  
+- Save 32 user registers into TRAPFRAME page;
+- Switch to kernel page table (the only kernel data mapped is the `trapframe`, so everything has to be loaded from there);
+- Set up stack for kernel C code;
+- Jump to kernel C code (`usertrap`);
+
+##### trampoline
+The start of the kernel's trap handling code. Must be in user page table, since ecall doesn't change satp. And also mapped at the same virtual address in the kernel page table. 
+
+##### trapframe
+A kernel page into the user page table at a known virtual address, always the same: 0x3fffffe000.
+
+##### switch to kernel page table.
+- Q: What does kernel page table store? what is the difference between kernel page table and user pagetable?  
+    A: Usually kernel page initialization would be done during the system's initialization. It manage the virtual address of kernel space.
+
+#### `usertrap`
+Execute the actual func code and save result into `a0`.
+
+#### `usertrapret`
+Prepare for next user->kernel transition. Set those trap handler related register back to normal.
+
+#### `userret`
+Jump to userret in `trampoline.S`, which mapped in both user and kernel page table. Thus we can switch back to user page table.
+Restore 32 registers from trapframe. `a0` is the last, after which we can no longer get at TRAPFRAME page.
+
+#### `sret`
+- Copies `sepc` to `pc`;
+- Changes mode to user
+- Re-enables interrupts (copies `SPIE` to `SIE`)
 
 # Lab notes
 Some notes when doing lab exercises.
 
 ## Lab: pgtbl
-
 ### Speed up system calls
-
 #### Goal
 Learn how to insert mappings into a pagetable.
 
@@ -232,3 +287,39 @@ Visualize RISC-V page tables, aid future debugging.
 
 - Q: `Walk()`?  
     A: Knowing VA, return PTE. Then we could compare it with PTE_A to get to know whether or not it is accessed.
+
+## Lab: traps
+### RISC-V assembly
+#### Goal
+Understand a bit of RISC-V assembly
+
+#### Do
+- `make fs.img`
+- Read the code in the generated call.asm for the functions `g`, `f` and `main`. Answer questions.
+
+#### Q&As
+##### Assembly code
+- `addi rd rs1 imm`: rs1+imm -> rd.
+   - `addiw`: 'w' stands for "wide", indicating a wider result compared to the regular `addi`.
+- `sd rs2, offset(rs1)`: Store double word, from register to memory. rs2 -> memory caled through rs1.
+- `ld rd, offset(rs1) `: Load double word, from memory to register. Memory caled through rs1 -> rd.
+- `li rs1 imme`: Load an immediate value into register rs1.
+- `auipc rs1 imme`:  Immediate being shifted left by 12 bits + pc -> rs1.
+- `jalr 1554(ra)`: Jump and Link Register, Jump to the address in ra + 1554.
+
+##### Register
+- ra register: Store return address, so it ussually store the address of instruction after the current function call.
+
+##### Standard function prologue and epilogue
+Responsible for setting up and tearing down the function's stack frame.  
+Stack frame is a block of memory on the call stack that is used for storing local variables, preserving register, and managing the flow of control betweem functions. 
+
+###### Function Prologue
+1. Allocate Stack Space: `addi sp, sp, -frame_size`
+2. Save Registers (if needed): `sd s0, offset(p)`
+3. Set up the Base Pointer (optional) to reference local variables within the stack frame: `addi s0, sp, frame_size`
+
+###### Function Epilogue
+1. Restore Registers: `ld s0, offset(sp)`
+2. Deallocate Stack Space: `addi sp, sp, frame_size`
+3. Return transfer control back to the calling function: `ret`
