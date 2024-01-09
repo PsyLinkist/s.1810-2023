@@ -146,6 +146,16 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // #alarm 
+  p->nticks = 0; // initiate nticks to 0
+  p->insignal = 0; // initiate, not in signal
+  // Allocate a sigframe page.
+  if((p->sigframe = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
   return p;
 }
 
@@ -158,6 +168,14 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+
+  // #alarm
+  if(p->sigframe)
+    kfree((void*)p->sigframe);
+  p->sigframe = 0;
+
+  p->insignal = 0;
+
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;

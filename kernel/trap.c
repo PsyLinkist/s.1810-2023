@@ -9,6 +9,8 @@
 struct spinlock tickslock;
 uint ticks;
 
+typedef void (*HandlerFunction)(void); // #alarm
+
 extern char trampoline[], uservec[], userret[];
 
 // in kernelvec.S, calls kerneltrap().
@@ -66,6 +68,18 @@ usertrap(void)
 
     syscall();
   } else if((which_dev = devintr()) != 0){
+    // #alarm
+    if(which_dev == 2 && p->ticks > 0) { // timer interrupt
+      p->nticks++;
+      if(p->ticks <= p->nticks && p->insignal == 0) {
+        p->insignal = 1;
+        memmove(p->sigframe, p->trapframe, sizeof(struct trapframe)); // save registers.
+        p->trapframe->epc = p->handler; // invoke handler by setting the program counter at the time of the exception.
+        p->nticks = 0;
+      }
+    }
+    
+    
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
