@@ -323,3 +323,66 @@ Stack frame is a block of memory on the call stack that is used for storing loca
 1. Restore Registers: `ld s0, offset(sp)`
 2. Deallocate Stack Space: `addi sp, sp, frame_size`
 3. Return transfer control back to the calling function: `ret`
+
+### Backtrace 
+#### Goal
+Useful for debugging. List the function calls on the stack above the point where the error occured.
+
+#### Do 
+- Use frame pointer in `s0` to walk up the current stack. - Print the saved return address in each stack frame.
+- Implement a `backtrace()` in `kernel/printf.c`.
+- Insert the call to `backtrace()` in `sys_sleep`, then run `bttest`.
+- Add prototype to `kernel/defs.h`.
+- Add function `r_fp()` to `kernel/riscv.h` which reads `s0`. It should be called in backtrace.
+- Use `PGROUNDDOWN (fp)` to identify the page, if changes, then stop tracing.
+- After finish `backtrace`, add it to `panic` in `kernel/printf.c`.
+
+#### Keywords
+#backtracing
+
+#### Q&As
+- Q: How to fetch the first (current) stack frame pointer?  
+   A: Stored in `s0`, read it through `r_fp`.
+- Q: Where is the saved return address?  
+   A: **Return address** lives at a fixed offset (-8) from the frame pointer of a stack frame, **saved frame pointer** lives at fixed offset (-16) from the frame pointer.
+- Q: The last stack frame?  
+   A: The saved frame pointer.
+- Q: Fetch the content of an address?  
+   A: For example, **return address** is the content of an another address, which is the offset (-8) from the frame pointer. So `return_addr_ptr = (uint64*)(stack_frame_pointer - 8)` there is.
+
+### Alarm
+#### Goal
+A feature that periodically alerts a process based on its' CPU time usage.  
+
+#### Do
+##### test0
+- [x] Modify Makefile to cause `alarmtest.c` to be compiled as an xv6 user program.
+- [x] Put declarations in `user/user.h`: `int sigalarm(int ticks, void (*handler)());`, `int sigreturn(void);`
+- [x] To allow `alarmtest` to invoke the sigalarm and sig return system calls, Update `user/usys.pl`, `kernel/syscall.h`, `kernel/syscall.c`.
+- [x] Just return 0 in `sys_sigreturn` for now.
+- [x] Modify `proc` structure (in kernel/proc.h), add new field **alarm interval** and **handler pointer**, `sys_sigalarm(interval, handler pointer)` should store the **alarm interval** and the **pointer to the handler function** in these new features.
+- [x] Add new field **nticks** in `struct proc` to store how many ticks have passed between **last call to a process's alarm handler - current**.
+- [x] Initialize `proc` fields in `allocproc()` in `proc.c`.
+- [x] Only update a process's **nticks** when there's a timer interrupt: `if(which_dev == 2)...` (if this is a timer interrupt).
+- [x] Modify `usertrap()` to make process execute the handler function when the process's alarm interval expires.
+- [x] Run `make CPUS=1 qemu-gdb` to do alarmtest. Haven't gotten used to gdb, so just `make CPUS=1 qemu`.
+
+##### test1-test3
+- [x] Prevent re-entrant calls by setting a new attribute in proc.
+- [x] Save registers into `struct proc` in `usertrap` when interrupted to execute handler.
+- [x] Restore them in `sys_sigreturn`.
+- [x] Return origin a0 in `sys_sigreturn`.
+#### Keywords
+#alarm
+#### Q&As
+- Q: How to run functions by pointer pointing to the function in kernel?  
+    A: Modify pc register. (Check the structure trapframe)
+
+- Q: What registers do I need to save and restore to resume the interrupted code correctly?  
+    A: Just store the entire trapframe.
+
+- Q: Save to where?  
+    A: Proc itself. Allocate a new trapframe structure.
+
+- Q: Why return a0 in sys_sigreturn? Or another question, why return 0 in syscall? What will happen if not returning 0?  
+    A: Return 0 is a convention which signifys that the peration completed without errors. In this function, there is no check phase in test3, so a0 could be a0 itself.
