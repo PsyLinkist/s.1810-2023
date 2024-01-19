@@ -149,6 +149,33 @@ Restore 32 registers from trapframe. `a0` is the last, after which we can no lon
 - Changes mode to user
 - Re-enables interrupts (copies `SPIE` to `SIE`)
 
+## xv6-Chapter5
+### Device drivers
+#### 新硬件，新问题
+- 硬件本身的交互困难；
+- 如何让新硬件与cpu并行；
+- 新硬件怎么使用中断来获取资源：  
+    软件需要把当前工作暂停，并响应新硬件的请求。RISC-V这里就用跟系统调用一样的trap机制就行。
+
+##### kernel 怎么看到中断请求的
+device(send) -> PLIC(which dev) -> trap(save current info) -> usertrap()/kerneltrap()(handling) -> devintr(call corresponding hardware intr)
+
+##### 通过 uart 发送字符到 console 的过程 (硬件代码下半部分)
+kerneltrap() -> 
+devintr() - plic_claim() -> 
+uartintr() [read waiting input chars from UART hardware] - 
+uartgetc() [check LSR, if ready, read RHR] -> 
+consoleintr() [store input chars for consumption by consoleread()] -  
+wakeup() [wake up consoleread() if a whole line or end-of-life] -> 
+plic_complete()
+
+##### scheduler 现在开始跑上半部分（现在开始需要cpu）
+-- sh's read():
+wakeup() -> consoleread() [return from sleep, see input char in cons.buf[cons.r]]
+
+#### 关闭中断
+intr_off(): w_sstatus(r_sstatus() & ~SSTATUS_SIE)
+
 # Lab notes
 Some notes when doing lab exercises.
 
@@ -386,3 +413,77 @@ A feature that periodically alerts a process based on its' CPU time usage.
 
 - Q: Why return a0 in sys_sigreturn? Or another question, why return 0 in syscall? What will happen if not returning 0?  
     A: Return 0 is a convention which signifys that the peration completed without errors. In this function, there is no check phase in test3, so a0 could be a0 itself.
+
+## Lab: 
+### Copy-On-Write fork()
+#### Goal
+Improve preformence when doing `fork()`.
+Impelementing copy-on-write fork(), which does not copy page at init. Instead it marks PTEs in both parent and child as read-only.   
+When either process tries to write one of these COW pages, CPU invokes a page fault, **kernel page-fault handler** detects this case, allocates a new page, copies the original page into the new page, and modifies the relevant PTEs in the faulting process to refer to the new page with marked writeable.
+
+#### Do
+- Check macros and definitions for page table flags at the end of `kernel/riscv.h`.
+
+- Use RSW bits in the RISC-V PTE to record whether a PTE is a COW mapping.
+   - [x] Add PTE_COW as flag.
+
+- Modify `uvmcopy()`.
+   - [x] Map the parent's physical pages into the child instead of allocating; 
+   - [x] Clear `PTE_W` in the PTEs of both child and parent for pages that have `PTE_W` set.
+
+- Modify `usertrap()`.
+   - [x] Recognize **write page-fault occers on a COW page that was originally writeable**;
+   - [x] Allocate a new page with `kalloc()`, copy the old page, install it in the PTE with `PTE_W` set. 
+   - [x] Kill process when a COW page fault occurs while there's no free memory.
+   - [x] Pages originally read-only should remain read-only (figure out how to recogniaze it), kill process that tries to write such a page.
+
+- Physical page management.
+   - [x] Keep each physical page a "reference count" in a fixed-size array of integers. (Index the array with the page's physical address devided by 4096, initiate the array by `kinit()` in `kalloc.c` using highest physical address of any page on the free list)
+   - [x] Modify mappages() to increment reference count.
+   - [x] Modify `kalloc()` to set a page's reference count to 1 when `kalloc()` allocates it.
+   - [x] Modify `fork()` to increment reference count. Actually it's with `mappages()`
+   - [x] Modify any func drops a page with decrement reference count. Any func else except `uvunmap()`?
+   - [x] Modify `kfree()` to only place a page back on the free list when its reference count is zero.
+
+- [x] Modify `copyout()` to use the same scheme as page faults when it encounters a COW page. (figure out what `copyout()` does, and how does it relate to COW page)
+
+#### Keywords
+#COW fork
+
+#### Q&As
+- Q: What is PTE? Where does it store?  
+    A: PTE (page table entry), stored in a page table (an address), each contains a 44-bit physical page number (PPN) and some flags.  
+    It's actually an pointer point to pa in the code.
+
+- Q: What's the relationship between page table and process?  
+    A: Each process has its own page table.
+
+- Q: How's the flags of every pte when initiated, 0 or 1?  
+    A: 0, they are designated by `mappages()`.
+
+- Q: Where the f is the scause table??  
+    A: https://pdos.csail.mit.edu/6.1810/2023/lec/l-usingvm.pdf
+
+- Q: RISC-V distinguishes three kinds of page faults, does xv6 do the same? If so, how? And what kind of page fault is it when write the un-writeable?  
+    A: No, xv6 just kills them all. Store/AMO page fault.
+
+- Q: How to fetch the corresponding pte to the current page fault?  
+    A: `stval` stores the virtual address that caused the fault, fetch it by `r_stval()`. `walk()` find the pte.
+
+- Q: Can we use same pte in different pagetable?  
+    A: No.
+
+- Q: Then how do I find the parents' pte and set it writeable again?  
+    A: No, you can't set it writeable again, accept it. Just allocate a new page when write the unwriteable.
+
+- Q: How to install a new page in a existing pte?  
+    A: Use `PA2PTE()` to replace the old pa.
+
+- Q: Decide the reference counter array's size?  
+    A: Since we are indexing the array with the page's physical address divided by 4096, We could use the ceiling(highest address / 4096) as the size.
+
+- Q: When do we need malloc for array? And when do we not?  
+    A: when the array's size is not known. And is known.
+
+- Q: Why `kfree()` old page even when parent may need it?  
+    A: Because old page has been set reference count when `uvmcopy()`.
