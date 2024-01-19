@@ -452,8 +452,7 @@ When either process tries to write one of these COW pages, CPU invokes a page fa
 
 #### Q&As
 - Q: What is PTE? Where does it store?  
-    A: PTE (page table entry), stored in a page table (an address), each contains a 44-bit physical page number (PPN) and some flags.  
-    It's actually an pointer point to pa in the code.
+    A: PTE (page table entry), stored in a page table (an address), each contains a 44-bit physical page number (PPN) and some flags.
 
 - Q: What's the relationship between page table and process?  
     A: Each process has its own page table.
@@ -465,7 +464,7 @@ When either process tries to write one of these COW pages, CPU invokes a page fa
     A: https://pdos.csail.mit.edu/6.1810/2023/lec/l-usingvm.pdf
 
 - Q: RISC-V distinguishes three kinds of page faults, does xv6 do the same? If so, how? And what kind of page fault is it when write the un-writeable?  
-    A: No, xv6 just kills them all. Store/AMO page fault.
+    A: Yes, but xv6 just kills them all instead of do something for it. Store/AMO page fault.
 
 - Q: How to fetch the corresponding pte to the current page fault?  
     A: `stval` stores the virtual address that caused the fault, fetch it by `r_stval()`. `walk()` find the pte.
@@ -477,7 +476,7 @@ When either process tries to write one of these COW pages, CPU invokes a page fa
     A: No, you can't set it writeable again, accept it. Just allocate a new page when write the unwriteable.
 
 - Q: How to install a new page in a existing pte?  
-    A: Use `PA2PTE()` to replace the old pa.
+    A: Use `PA2PTE()` to replace the old pte.
 
 - Q: Decide the reference counter array's size?  
     A: Since we are indexing the array with the page's physical address divided by 4096, We could use the ceiling(highest address / 4096) as the size.
