@@ -315,22 +315,30 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
-
+  // char *mem; // #COW fork
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
+
+    // #COW fork
+    // set PTE_COW, clear PTE_W if exist, save PTE_W existence info
+    if(*pte & PTE_W) {
+      *pte |= PTE_COW; // set PTE_COW
+      *pte &= ~PTE_W; // clear PTE_W
+    }
+
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0){ // change 'mem' to 'pa', let new pte point to the old pa.
+      // kfree(mem); // don't need free now
       goto err;
     }
+    increaseRefCountArr((void *)pa);
   }
   return 0;
 
@@ -366,9 +374,30 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     if(va0 >= MAXVA)
       return -1;
     pte = walk(pagetable, va0, 0);
-    if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 ||
-       (*pte & PTE_W) == 0)
+    if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0)
       return -1;
+    // #COW fork
+    if((*pte & PTE_W) == 0 && (*pte & PTE_COW) == 0) {
+      return -1;
+    }
+    if(*pte & PTE_COW) {
+      char *mem;
+      uint64 pa = PTE2PA(*pte);
+      uint flags;
+
+      if((mem = kalloc()) == 0) { // return -1 if memory isn't enough for this
+          return -1;
+      }
+        
+      memmove(mem, (char*)pa, PGSIZE);
+      // install the new page in a pte with `PTE_W` set.
+      *pte |= PTE_W;
+      *pte &= ~PTE_COW;
+      flags = PTE_FLAGS(*pte);
+
+      *pte = PA2PTE((uint64)mem) | flags;
+      kfree((void*)pa);
+    }
     pa0 = PTE2PA(*pte);
     n = PGSIZE - (dstva - va0);
     if(n > len)

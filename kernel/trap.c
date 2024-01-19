@@ -67,6 +67,39 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+    // #COW fork
+    if(which_dev == 3) { // Store/AMO page fault.
+      uint64 va;
+      va = r_stval();
+      if(va >= MAXVA){
+        setkilled(p);
+      } else {
+        pte_t *pte = walk(p->pagetable, va, 0); // fetch pte
+        if(*pte & PTE_COW) {
+          // allocate a new page copy from old page, 
+          char *mem;
+          uint64 pa = PTE2PA(*pte);
+          uint flags;
+
+          if((mem = kalloc()) == 0) { // kill the process if memory isn't enough for this
+            setkilled(p);
+          } else {
+            memmove(mem, (char*)pa, PGSIZE);
+            // install the new page in a pte with `PTE_W` set.
+            *pte |= PTE_W;
+            *pte &= ~PTE_COW;
+            flags = PTE_FLAGS(*pte);
+
+            *pte = PA2PTE((uint64)mem) | flags;
+            kfree((void*)pa);
+          }
+        } else {
+          // kill the process tries to write the originally unwriteable page.
+          setkilled(p); 
+        }
+      }
+    }
+    
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
@@ -214,6 +247,9 @@ devintr()
     w_sip(r_sip() & ~2);
 
     return 2;
+  } else if(scause == 15) { // #COW fork 
+    // Acknowledge the Store/AMO page fault
+    return 3;
   } else {
     return 0;
   }
