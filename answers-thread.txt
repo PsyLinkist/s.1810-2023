@@ -1,0 +1,1 @@
+when 2 put_threads both entering `put()`, and `i = key % NBUCKET` equals, may results in entry missing.

@@ -99,7 +99,7 @@ thread_create(void (*func)())
   t->state = RUNNABLE;
   // YOUR CODE HERE
   t->context.ra = (uint64)func;
-  t->context.sp = (uint64)t->stack+STACK_SIZE; // stack grows downwards
+  t->context.sp = (uint64)t->stack+STACK_SIZE; // stack grows downwards in xv6
 }
 
 void 
